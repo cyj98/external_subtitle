@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         在线视频外挂字幕
 // @namespace    https://truework.top
-// @version      0.42
-// @description  目前支持B站，爱奇艺，优酷和西瓜视频（腾讯视频的有bug暂不支持，西瓜视频全屏暂无字幕），按Q键+100ms，按W键-100ms，按E键显示/隐藏字幕，console可作为transcript使用
+// @version      0.43
+// @description  目前支持B站，爱奇艺，优酷，百度网盘和西瓜视频（百度网盘和西瓜视频全屏暂无字幕，百度网盘只能在firefox里使用），按Q键+100ms，按W键-100ms，按E键显示/隐藏字幕，console可作为transcript使用
 // @author       cyj98
 // @match        https://www.bilibili.com/bangumi/*
 // @match        https://www.iqiyi.com/*
 // @match        https://www.ixigua.com/cinema/album/*
 // @match        https://v.youku.com/*
+// @match        https://pan.baidu.com/play/*
 // @require https://greasyfork.org/scripts/373379-subtitle-utils-module/code/subtitle%20utils%20module.js?version=637875
 // ==/UserScript==
 
@@ -16,13 +17,18 @@
     let fileInput = document.createElement("input")
     fileInput.type = 'file'
     document.body.prepend(fileInput)
-    let newFile = false
-    let firstFile = false
 
+    // after first file, this variable always true
+    let firstFile = false
+    let newFile = false
+
+    const hostname = window.location.hostname
+    let curTimeElem, subtitlePosElem, subtitleElem, snackbarElem
+    let observer, reader
+
+    // keep settings after reload
     let isShowSubtitle = true
     let delayTime = 0
-    const hostname = window.location.hostname
-    let subtitleElem, snackbarElem, curTimeElem, subtitlePosElem
 
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
@@ -32,14 +38,28 @@
 
         if (firstFile === true) {
             newFile = true
-            subtitleElem.remove()
-            snackbarElem.remove()
+            observer.disconnect()
+            reader.abort()
         } else {
-            const subtitlePosObj = { 'www.bilibili.com': 'subtitle-position', 'www.iqiyi.com': 'iqp-subtitle', 'www.ixigua.com': 'teleplay__playerContainer', 'v.youku.com': 'subtitle-container' }
-            const curTimeObj = { 'www.bilibili.com': 'bilibili-player-video-time-now', 'www.iqiyi.com': 'iqp-time-cur', 'www.ixigua.com': 'xgplayer-time', 'v.youku.com': 'control-time-current' }
+            const subtitlePosObj = { 'www.bilibili.com': 'subtitle-position', 'www.iqiyi.com': 'iqp-subtitle', 'www.ixigua.com': 'teleplay__playerContainer', 'v.youku.com': 'subtitle-container', 'pan.baidu.com': 'vjs-text-track-display' }
+            const curTimeObj = { 'www.bilibili.com': 'bilibili-player-video-time-now', 'www.iqiyi.com': 'iqp-time-cur', 'www.ixigua.com': 'xgplayer-time', 'v.youku.com': 'control-time-current', 'pan.baidu.com': 'vjs-current-time' }
+
             subtitlePosElem = document.getElementsByClassName(subtitlePosObj[hostname])[0]
             curTimeElem = document.getElementsByClassName(curTimeObj[hostname])[0]
 
+            subtitleElem = document.createElement('div')
+            subtitleElem.id = 'custom-subtitle'
+            subtitleElem.style.cssText = 'text-align:center;  font-size: 32px; font-weight: bold;  text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;'
+            snackbarElem = document.createElement('div')
+            snackbarElem.id = 'snackbar'
+            snackbarElem.style.cssText = 'font-size: 16px; position: absolute; text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;'
+
+            if (hostname === 'www.ixigua.com' || hostname === 'pan.baidu.com') {
+                snackbarElem.style.cssText += "position: absolute; z-index: 1; color: white; bottom: 56px;"
+                subtitleElem.style.cssText += "position: absolute; z-index: 1; color: white; bottom: 0; left: 50%; -webkit-transform: translateX(-50%); transform: translateX(-50%);"
+            }
+
+            // console.log(subtitlePosElem, curTimeElem)
             let isShowDelay = false
             const logKey = (e) => {
                 const key = e.key.toUpperCase()
@@ -71,22 +91,15 @@
             document.addEventListener('keypress', logKey);
         }
         firstFile = true
-        subtitleElem = document.createElement('div')
-        subtitleElem.id = 'custom-subtitle'
-        subtitleElem.style.cssText = 'text-align:center;  font-size: 32px; font-weight: bold;  text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;'
-        snackbarElem = document.createElement('div')
-        snackbarElem.id = 'snackbar'
-        snackbarElem.style.cssText = 'font-size: 16px; position: absolute; text-shadow: -1px 0 black, 0 1px black, 1px 0 black, 0 -1px black;'
+
         subtitlePosElem.prepend(subtitleElem)
         subtitlePosElem.prepend(snackbarElem)
-        if (hostname === 'www.ixigua.com') {
-            snackbarElem.style.cssText += "position: absolute; z-index: 1; color: white; bottom: 56px;"
-            subtitleElem.style.cssText += "position: absolute; z-index: 1; color: white; bottom: 0; left: 50%; -webkit-transform: translateX(-50%); transform: translateX(-50%);"
-        } else if (hostname === 'www.iqiyi.com') {
+
+        if (hostname === 'www.iqiyi.com') {
             subtitlePosElem.style.cssText += "display: block; height: 50px;"
         }
 
-        const reader = new FileReader();
+        reader = new FileReader();
         reader.readAsText(file)
         reader.onload = (e) => {
             let subtitles
@@ -122,9 +135,15 @@
                 let strTime
                 if (hostname === 'www.ixigua.com') {
                     strTime = curTimeElem.firstElementChild.firstElementChild.innerHTML;
+                } else if (hostname === 'pan.baidu.com') {
+                    strTime = curTimeElem.firstElementChild.innerHTML;
+                    strTime = strTime.replace(/<span[^>]*>([^<]+)<\/span>/g, '$1');
+                    strTime = strTime.replace("Current Time ", "")
+                    // console.log(strTime)
                 } else {
                     strTime = curTimeElem.innerHTML
                 }
+                console.log(strTime)
                 if (strTime.length <= 5) {
                     strTime = "00:" + strTime + ",000"
                 } else {
@@ -151,7 +170,7 @@
                 prevPos = pos
             };
 
-            const observer = new MutationObserver(callback);
+            observer = new MutationObserver(callback);
             const config = {
                 attributes: true,
                 childList: true,
