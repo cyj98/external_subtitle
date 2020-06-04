@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         在线视频外挂字幕
 // @namespace    https://truework.top
-// @version      0.43
-// @description  目前支持B站，爱奇艺，优酷，百度网盘和西瓜视频（百度网盘和西瓜视频全屏暂无字幕，百度网盘只能在firefox里使用），按Q键+100ms，按W键-100ms，按E键显示/隐藏字幕，console可作为transcript使用
+// @version      0.44
+// @description  目前支持B站，爱奇艺，优酷，百度网盘（百度网盘由于chrome有closed shadow dom暂时只能在firefox里使用），按Q键+100ms，按W键-100ms，按E键显示/隐藏字幕，console可作为transcript使用
 // @author       cyj98
 // @match        https://www.bilibili.com/bangumi/*
 // @match        https://www.iqiyi.com/*
@@ -57,6 +57,10 @@
             if (hostname === 'www.ixigua.com' || hostname === 'pan.baidu.com') {
                 snackbarElem.style.cssText += "position: absolute; z-index: 1; color: white; bottom: 56px;"
                 subtitleElem.style.cssText += "position: absolute; z-index: 1; color: white; bottom: 0; left: 50%; -webkit-transform: translateX(-50%); transform: translateX(-50%);"
+                document.addEventListener('fullscreenchange', () => {
+                    subtitlePosElem.prepend(subtitleElem)
+                    subtitlePosElem.prepend(snackbarElem)
+                }, false)
             }
 
             // console.log(subtitlePosElem, curTimeElem)
